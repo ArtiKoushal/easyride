@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cab Booking with OpenStreetMap</title>
+
+    <!-- Leaflet CSS & JavaScript for OpenStreetMap -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        #map {
+            height: 400px;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        input, button {
+            margin: 5px;
+            padding: 10px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Cab Booking with OpenStreetMap</h2>
+
+    <div id="map"></div>
+
+    <label>Pickup:</label>
+    <input type="text" id="pickup" placeholder="Enter pickup location">
+    <button onclick="searchLocation('pickup')">Find</button>
+
+    <label>Drop:</label>
+    <input type="text" id="drop" placeholder="Enter drop location">
+    <button onclick="searchLocation('drop')">Find</button>
+
+    <button onclick="calculateRoute()">Calculate Route</button>
+    <p id="distance"></p>
+    <button onclick="calculateFare()">Calculate Fare</button>
+
+    <script>
+        // Initialize Map
+        let map = L.map('map').setView([20.5937, 78.9629], 5); // Default: India
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Function to Search Location using Nominatim API
+        async function searchLocation(inputId) {
+            let query = document.getElementById(inputId).value;
+            let response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`);
+            let data = await response.json();
+
+            if (data.length > 0) {
+                let lat = data[0].lat;
+                let lon = data[0].lon;
+                document.getElementById(inputId).dataset.lat = lat;
+                document.getElementById(inputId).dataset.lon = lon;
+
+                L.marker([lat, lon]).addTo(map)
+                    .bindPopup(`${query}`)
+                    .openPopup();
+                
+                map.setView([lat, lon], 12);
+            } else {
+                alert("Location not found!");
+            }
+        }
+
+        // Function to Calculate Route and Distance using OSRM API
+        async function calculateRoute() {
+            let pickupLat = document.getElementById("pickup").dataset.lat;
+            let pickupLon = document.getElementById("pickup").dataset.lon;
+            let dropLat = document.getElementById("drop").dataset.lat;
+            let dropLon = document.getElementById("drop").dataset.lon;
+
+            if (!pickupLat || !dropLat) {
+                alert("Please select both pickup and drop locations!");
+                return;
+            }
+
+            let routeURL = `https://router.project-osrm.org/route/v1/driving/${pickupLon},${pickupLat};${dropLon},${dropLat}?overview=full&geometries=geojson`;
+
+            let response = await fetch(routeURL);
+            let data = await response.json();
+
+            if (data.routes.length > 0) {
+                let route = data.routes[0];
+                let distance = (route.distance / 1000).toFixed(2); // Convert to KM
+                document.getElementById("distance").innerText = `Estimated Distance: ${distance} km`;
+
+                // Display route on map
+                let routeCoordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                let routeLine = L.polyline(routeCoordinates, { color: 'blue' }).addTo(map);
+                map.fitBounds(routeLine.getBounds());
+            }
+        }
+
+        // Function to Calculate Fare
+        function calculateFare() {
+            let distanceText = document.getElementById("distance").innerText;
+            let distance = parseFloat(distanceText.match(/\d+(\.\d+)?/)[0]); // Extract number
+            let fare = distance * 10; // Example: ₹10 per km
+            alert(`Estimated Fare: ₹${fare}`);
+        }
+    </script>
+
+</body>
+</html>
